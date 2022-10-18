@@ -92,6 +92,10 @@ class ActionSequence:
         self.listbox.grid(sticky=tk.W)
 
 
+    def append_item(self, text):
+        self.listbox.insert(tk.END, text)
+
+
     def _select_item(self, event):
         self.selected_idx = self.listbox.nearest(event.y)
  
