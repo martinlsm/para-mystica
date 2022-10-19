@@ -8,12 +8,27 @@ from factions import Dwarves
 from factions import faction_names, create_faction
 
 
+# This object can be passed around to GUI components that want to
+# signal updates to the overall GUI.
+class AppController:
+    def __init__(self, app):
+        self.app = app
+
+
+    def select_faction(self, faction_name):
+        self.app.select_faction(faction_name)
+
+
+    def append_game_event(self, text):
+        self.app.append_game_event(text)
+
+
 class App:
     def __init__(self):
         self.root = tk.Tk()
 
-        FactionSelector(self)
-        ActionSequence(self)
+        FactionSelector(self.root, AppController(self))
+        self.game_event_seq = GameEventSequence(self.root)
 
         self.active_faction = None
         self.action_selector = None
@@ -29,28 +44,35 @@ class App:
 
         self.active_faction = create_faction(faction_name)
 
-        self.action_selector = ActionSelector(self, self.active_faction)
+        self.action_selector = ActionSelector(self.root, AppController(self), self.active_faction)
+
+
+    def append_game_event(self, text):
+        self.game_event_seq.append(text)
 
 
 class FactionSelector:
-    def __init__(self, app):
-        self.app = app
+    def __init__(self, master, app_ctrl):
+        self.app_ctrl = app_ctrl
 
         self.selection = tk.StringVar()
         self.selection.set('Choose Faction')
         self.selection.trace('w', self._selection_callback)
 
-        self.dropdown_menu = tk.OptionMenu(app.root, self.selection, *faction_names())
+        self.dropdown_menu = tk.OptionMenu(master, self.selection, *faction_names())
         self.dropdown_menu.grid(sticky=tk.NW)
 
 
     def _selection_callback(self, *args):
-        self.app.select_faction(self.selection.get())
+        self.app_ctrl.select_faction(self.selection.get())
 
 
+# XXX: Rename
 class ActionSelector:
-    def __init__(self, app, faction):
-        self.frame = tk.Frame(app.root)
+    def __init__(self, master, app_ctrl, faction):
+        self.app_ctrl = app_ctrl
+
+        self.frame = tk.Frame(master)
         self.frame.grid(sticky=tk.S)
 
         self.act_btns = []
@@ -68,13 +90,14 @@ class ActionSelector:
         grid_row = len(self.act_btns) // 5
         grid_col = len(self.act_btns) % self.grid_width
 
-        btn = action_button_create(action, self.frame, grid_row, grid_col)
+        btn = action_button_create(self.app_ctrl, self.frame, action, grid_row, grid_col)
         self.act_btns.append(btn)
 
 
-class ActionSequence:
-    def __init__(self, app):
-        self.listbox = tk.Listbox(app.root, selectmode=tk.SINGLE, activestyle=tk.NONE)
+class GameEventSequence:
+    def __init__(self, master):
+        self.listbox = tk.Listbox(master, selectmode=tk.SINGLE, activestyle=tk.NONE)
+        self.listbox.grid(sticky=tk.W)
 
         # Left click
         self.listbox.bind('<Button-1>', self._select_item)
@@ -85,14 +108,8 @@ class ActionSequence:
 
         self.selected_idx = None
 
-        # XXX: Temp stuff
-        for i,name in enumerate(['name'+str(i) for i in range(10)]):
-            self.listbox.insert(tk.END, name)
 
-        self.listbox.grid(sticky=tk.W)
-
-
-    def append_item(self, text):
+    def append(self, text):
         self.listbox.insert(tk.END, text)
 
 
