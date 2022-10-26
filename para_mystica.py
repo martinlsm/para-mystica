@@ -4,7 +4,7 @@ import actions
 
 from action_buttons import action_button_create
 
-from factions import faction_names, create_faction
+from factions import faction_names, create_faction, list_actions
 
 from resources import Resources
 
@@ -18,13 +18,17 @@ class AppController:
     def select_faction(self, faction_name):
         self.app.select_faction(faction_name)
 
-    def append_game_event(self, text):
-        self.app.append_game_event(text)
+    def append_game_event(self, text, action):
+        self.app.append_game_event(text, action)
+
+    def update_resource_displays(self):
+        self.app.update_resource_displays()
 
 
 class App:
     def __init__(self):
         self.root = tk.Tk()
+        self.root.title('Para Mystica')
 
         FactionSelector(self.root, AppController(self))
         self.game_event_seq = GameEventSequence(self.root)
@@ -40,13 +44,19 @@ class App:
         if self.active_faction is not None:
             self.action_selector.destroy()
 
-        self.active_faction = create_faction(faction_name)
+        self.active_faction = faction_name
 
         self.action_selector = ActionSelector(self.root, AppController(self),
                                               self.active_faction)
 
-    def append_game_event(self, text):
-        self.game_event_seq.append(text)
+    def append_game_event(self, text, action):
+        self.game_event_seq.append(text, action)
+
+    def update_resource_displays(self):
+        faction = create_faction(self.active_faction)
+        acts = self.game_event_seq.get_actions()
+        resource_list = actions.process_actions(faction, acts)
+        self.resource_displays.update(resource_list)
 
 
 class FactionSelector:
@@ -65,7 +75,6 @@ class FactionSelector:
         self.app_ctrl.select_faction(self.selection.get())
 
 
-# XXX: Rename
 class ActionSelector:
     def __init__(self, master, app_ctrl, faction):
         self.app_ctrl = app_ctrl
@@ -76,7 +85,7 @@ class ActionSelector:
         self.act_btns = []
         self.grid_width = 5
 
-        for action in actions.actions_list(faction):
+        for action in list_actions(faction):
             self._add_action_button(action)
 
     def destroy(self):
@@ -104,10 +113,20 @@ class GameEventSequence:
         # Drag mouse
         self.listbox.bind('<B1-Motion>', self._shift_selection)
 
+        # Unfortunately, Tkinter does not seem to support storing metadata of
+        # its elements; they need to be plain strings. This list is therefore
+        # used to store the corresponding action of each element in the
+        # listbox and it needs to be mirroring self.listbox at all times.
+        self.list_actions = []
+
         self.selected_idx = None
 
-    def append(self, text):
+    def append(self, text, action):
         self.listbox.insert(tk.END, text)
+        self.list_actions.append(action)
+
+    def get_actions(self):
+        return self.list_actions.copy()
 
     def _select_item(self, event):
         self.selected_idx = self.listbox.nearest(event.y)
@@ -120,14 +139,28 @@ class GameEventSequence:
         old_idx = self.selected_idx
 
         if new_idx < old_idx:
+            # Swap the two elements.
             item_to_push_down = self.listbox.get(new_idx)
             self.listbox.delete(new_idx)
             self.listbox.insert(new_idx + 1, item_to_push_down)
+
+            # Do the same with the mirrored list of actions.
+            item_to_push_down = self.action_list[new_idx]
+            self.action_list.pop(new_idx)
+            self.action_list.insert(new_idx + 1, item_to_push_down)
+
             self.selected_idx = new_idx
         elif new_idx > old_idx:
+            # Swap the two elements.
             item_to_push_up = self.listbox.get(new_idx)
             self.listbox.delete(new_idx)
             self.listbox.insert(new_idx - 1, item_to_push_up)
+
+            # Do the same with the mirrored list of actions.
+            item_to_push_up = self.action_list(new_idx)
+            self.action_list.delete(new_idx)
+            self.action_list.insert(new_idx - 1, item_to_push_up)
+
             self.selected_idx = new_idx
 
 
@@ -136,20 +169,23 @@ class ResourceDisplayList:
         frame = tk.Frame(master)
         frame.grid(sticky=tk.E)
 
-        self.displays = [ResourceDisplay(frame, row, 0)
-                         for row in range(0, 7)]
+        self.displays = [ResourceDisplay(frame, f'Round {row + 1}', row, 0)
+                         for row in range(0, 6)]
+        self.displays.append(ResourceDisplay(frame, 'Postgame', 6, 0))
 
         # XXX: Remove this
         for display in self.displays:
             display.set_resources(Resources())
 
-    def update(resources_list):
+    def update(self, resources_list):
         for i,display in enumerate(self.displays):
             display.set_resources(resources_list[i])
 
 
 class ResourceDisplay:
-    def __init__(self, master, row, col):
+    def __init__(self, master, prefix, row, col):
+        self.prefix = prefix
+
         self.resources = Resources()
         frame = tk.Frame(master)
         frame.grid(sticky=tk.E)
@@ -158,7 +194,8 @@ class ResourceDisplay:
 
     def set_resources(self, resources):
         self.resources = resources.copy()
-        self.text.config(text=f'W: {self.resources.w}, ' +
+        self.text.config(text=f'{self.prefix}:  ' +
+                         f'W: {self.resources.w}, ' +
                          f'G: {self.resources.g}, ' +
                          f'P: {self.resources.p}')
 

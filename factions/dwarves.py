@@ -130,5 +130,5 @@ class Dwarves:
     def upgrade_shipping(self):
         raise ValueError('Dwarves do not have shipping')
 
-    def tunneling(self):
-        self.resources -= Resources(w=tunneling_worker_cost)
+    def tunnel(self):
+        self.resources -= Resources(w=self.tunneling_worker_cost)

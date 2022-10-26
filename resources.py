@@ -19,5 +19,11 @@ class Resources:
         assert(type(other) == Resources)
         return Resources(self.w * other.w, self.g * other.g, self.p * other.p)
 
+    def __str__(self):
+        return f'Resources(w={self.w}, g={self.g}, p={self.p})'
+
+    def __repr__(self):
+        return self.__str__()
+
     def copy(self):
         return Resources(w=self.w, g=self.g, p=self.p)
