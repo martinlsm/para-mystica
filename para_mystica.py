@@ -9,14 +9,21 @@ from factions import faction_names, create_faction, list_actions
 from resources import Resources
 
 
-# This object can be passed around to GUI components that want to
-# signal updates to the overall GUI.
 class AppController:
+    '''
+    This object can be passed around to GUI components that want to
+    signal updates to the overall GUI.
+    '''
+
     def __init__(self, app):
         self.app = app
 
     def select_faction(self, faction_name):
         self.app.select_faction(faction_name)
+
+    def select_active_round(self, round_num):
+        print(f'Selected round {round_num}')
+        self.app.select_active_round(round_num)
 
     def append_game_event(self, text, action):
         self.app.append_game_event(text, action)
@@ -31,11 +38,14 @@ class App:
         self.root.title('Para Mystica')
 
         FactionSelector(self.root, AppController(self))
-        self.game_event_seq = GameEventSequence(self.root)
-        self.resource_displays = ResourceDisplayList(self.root)
+
+        self.round_displays = RoundInfoDisplayList(self.root)
+
+        self.active_round_selector = ActiveRoundSelector(AppController(self), self.root)
 
         self.active_faction = None
         self.action_selector = None
+        self.active_round = None
 
     def run(self):
         self.root.mainloop()
@@ -58,6 +68,9 @@ class App:
         resource_list = actions.process_actions(faction, acts)
         self.resource_displays.update(resource_list)
 
+    def select_active_round(self, round_num):
+        self.active_round = round_num
+
 
 class FactionSelector:
     def __init__(self, master, app_ctrl):
@@ -69,7 +82,7 @@ class FactionSelector:
 
         self.dropdown_menu = tk.OptionMenu(master, self.selection,
                                            *faction_names())
-        self.dropdown_menu.grid(sticky=tk.NW)
+        self.dropdown_menu.pack()
 
     def _selection_callback(self, *args):
         self.app_ctrl.select_faction(self.selection.get())
@@ -80,7 +93,7 @@ class ActionSelector:
         self.app_ctrl = app_ctrl
 
         self.frame = tk.Frame(master)
-        self.frame.grid(sticky=tk.S)
+        self.frame.pack()
 
         self.act_btns = []
         self.grid_width = 5
@@ -100,11 +113,28 @@ class ActionSelector:
         self.act_btns.append(btn)
 
 
+# TODO: Rename
+class RoundFrame:
+    def __init__(self, master, label, row, col):
+        frame = tk.Frame(master)
+        frame.grid(row=row, column=col)
+
+        self.label = tk.Label(frame, text=label)
+        self.label.pack()
+
+        self.event_sequence = GameEventSequence(frame)
+
+        self.round_info_display = RoundInfoDisplay(frame)
+
+        # TODO: Might delete this later.
+        self.round_info_display.update(Resources(), Resources())
+
+
 class GameEventSequence:
     def __init__(self, master):
         self.listbox = tk.Listbox(master, selectmode=tk.SINGLE,
                                   activestyle=tk.NONE)
-        self.listbox.grid(sticky=tk.W)
+        self.listbox.pack()
 
         # Left click
         self.listbox.bind('<Button-1>', self._select_item)
@@ -164,40 +194,55 @@ class GameEventSequence:
             self.selected_idx = new_idx
 
 
-class ResourceDisplayList:
+# TODO: Rename
+class RoundInfoDisplayList:
     def __init__(self, master):
         frame = tk.Frame(master)
-        frame.grid(sticky=tk.E)
+        frame.pack()
 
-        self.displays = [ResourceDisplay(frame, f'Round {row + 1}', row, 0)
-                         for row in range(0, 6)]
-        self.displays.append(ResourceDisplay(frame, 'Postgame', 6, 0))
-
-        # XXX: Remove this
-        for display in self.displays:
-            display.set_resources(Resources())
-
-    def update(self, resources_list):
-        for i,display in enumerate(self.displays):
-            display.set_resources(resources_list[i])
+        self.round_events = \
+                [RoundFrame(frame, f'Round {col + 1}', 0, col) \
+                    for col in range(0, 6)]
 
 
-class ResourceDisplay:
-    def __init__(self, master, prefix, row, col):
-        self.prefix = prefix
 
-        self.resources = Resources()
+# TODO: Rename
+class RoundInfoDisplay:
+    def __init__(self, master):
         frame = tk.Frame(master)
-        frame.grid(sticky=tk.E)
-        self.text = tk.Label(frame)
-        self.text.grid(row=row, column=col)
+        frame.pack()
 
-    def set_resources(self, resources):
-        self.resources = resources.copy()
-        self.text.config(text=f'{self.prefix}:  ' +
-                         f'W: {self.resources.w}, ' +
-                         f'G: {self.resources.g}, ' +
-                         f'P: {self.resources.p}')
+        self.res_before = tk.Label(frame)
+        self.res_before.grid(row=0, column=0)
+
+        self.res_after = tk.Label(frame)
+        self.res_after.grid(row=1, column=0)
+
+    def update(self, res_before, res_after):
+        self.res_before.config(text=f'Before: W: {res_before.w}, G: {res_before.g}, P: {res_before.p}')
+        self.res_after.config(text=f'After: W: {res_after.w}, G: {res_after.g}, P: {res_after.p}')
+
+
+class ActiveRoundSelector:
+    def __init__(self, app_ctrl, master):
+        self.app_ctrl = app_ctrl
+
+        self.selection = tk.StringVar()
+        self.selection.set('Select Round')
+        self.selection.trace('w', self._selection_callback)
+
+        options = [f'Round {n}' for n in range(1, 7)]
+
+        self.dropdown_menu = tk.OptionMenu(master, self.selection, *options)
+        self.dropdown_menu.pack()
+
+    def _selection_callback(self, *args):
+        round_num = self._round_str_to_int(self.selection.get())
+        self.app_ctrl.select_active_round(round_num)
+
+    def _round_str_to_int(self, round_str):
+        # round_str must match the regex "Round [1-6]"
+        return int(round_str[6])
 
 
 if __name__ == '__main__':
