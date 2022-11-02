@@ -48,7 +48,7 @@ class Dwarves:
     max_level_shipping = None
     upgrade_shipping_cost = None
 
-    supported_actions = {
+    supported_actions = [
         Action.UPGRADE_DIGGING,
         Action.DIG,
         Action.BUILD_DWELLING,
@@ -57,7 +57,7 @@ class Dwarves:
         Action.UPGRADE_TO_SA,
         Action.UPGRADE_TO_SH,
         Action.TUNNELING,
-    }
+    ]
 
     def __init__(self):
         self.resources = Dwarves.starting_resources.copy()
@@ -70,6 +70,9 @@ class Dwarves:
 
         # Faction-specific attributes
         self.tunneling_worker_cost = 2
+
+    def get_resources(self):
+        return self.resources
 
     def next_round(self):
         self.resources += Dwarves.dwelling_income[self.num_dwellings] + \

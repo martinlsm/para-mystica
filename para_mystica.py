@@ -4,7 +4,7 @@ import actions
 
 from action_buttons import action_button_create
 
-from factions import faction_names, create_faction, list_actions
+from factions import faction_names, create_faction, supported_actions
 
 from resources import Resources
 
@@ -19,6 +19,7 @@ class AppController:
         self.app = app
 
     def select_faction(self, faction_name):
+        print(f'Selected faction "{faction_name}"')
         self.app.select_faction(faction_name)
 
     def select_active_round(self, round_num):
@@ -26,10 +27,11 @@ class AppController:
         self.app.select_active_round(round_num)
 
     def append_game_event(self, text, action):
+        print(f'Append game event "{text}":{action}')
         self.app.append_game_event(text, action)
 
-    def update_resource_displays(self):
-        self.app.update_resource_displays()
+    def update_round_displays(self):
+        self.app.update_round_displays()
 
 
 class App:
@@ -39,18 +41,25 @@ class App:
 
         FactionSelector(self.root, AppController(self))
 
-        self.round_displays = RoundInfoDisplayList(self.root)
+        rounds_master = tk.Frame(self.root)
+        rounds_master.pack()
+        self.round_frames = \
+                [RoundFrame(rounds_master, f'Round {col + 1}', 0, col) \
+                    for col in range(0, 6)]
 
         self.active_round_selector = ActiveRoundSelector(AppController(self), self.root)
 
+        # These attributes is set by various events.
         self.active_faction = None
+        # TODO: Is it good to secretly set this to 1 here?
+        self.active_round = 1
         self.action_selector = None
-        self.active_round = None
 
     def run(self):
         self.root.mainloop()
 
     def select_faction(self, faction_name):
+        # TODO: More cleanup is needed here. All round frames need to be refreshed.
         if self.active_faction is not None:
             self.action_selector.destroy()
 
@@ -60,13 +69,21 @@ class App:
                                               self.active_faction)
 
     def append_game_event(self, text, action):
-        self.game_event_seq.append(text, action)
+        round_idx = self.active_round - 1
+        self.round_frames[round_idx].append_event(text, action)
 
-    def update_resource_displays(self):
+    def update_round_displays(self):
+        # Create list of actions
+        action_lists = []
+        for round_frame in self.round_frames:
+            action_lists.append(round_frame.get_actions())
+
         faction = create_faction(self.active_faction)
-        acts = self.game_event_seq.get_actions()
-        resource_list = actions.process_actions(faction, acts)
-        self.resource_displays.update(resource_list)
+        resource_list = actions.process_actions(faction, action_lists)
+
+        for (res_before, res_after), round_frame \
+                in zip(resource_list, self.round_frames):
+            round_frame.update_round_info(res_before, res_after)
 
     def select_active_round(self, round_num):
         self.active_round = round_num
@@ -89,7 +106,7 @@ class FactionSelector:
 
 
 class ActionSelector:
-    def __init__(self, master, app_ctrl, faction):
+    def __init__(self, master, app_ctrl, faction_name):
         self.app_ctrl = app_ctrl
 
         self.frame = tk.Frame(master)
@@ -98,7 +115,7 @@ class ActionSelector:
         self.act_btns = []
         self.grid_width = 5
 
-        for action in list_actions(faction):
+        for action in supported_actions(faction_name):
             self._add_action_button(action)
 
     def destroy(self):
@@ -111,23 +128,6 @@ class ActionSelector:
         btn = action_button_create(self.app_ctrl, self.frame, action, grid_row,
                                    grid_col)
         self.act_btns.append(btn)
-
-
-# TODO: Rename
-class RoundFrame:
-    def __init__(self, master, label, row, col):
-        frame = tk.Frame(master)
-        frame.grid(row=row, column=col)
-
-        self.label = tk.Label(frame, text=label)
-        self.label.pack()
-
-        self.event_sequence = GameEventSequence(frame)
-
-        self.round_info_display = RoundInfoDisplay(frame)
-
-        # TODO: Might delete this later.
-        self.round_info_display.update(Resources(), Resources())
 
 
 class GameEventSequence:
@@ -147,16 +147,16 @@ class GameEventSequence:
         # its elements; they need to be plain strings. This list is therefore
         # used to store the corresponding action of each element in the
         # listbox and it needs to be mirroring self.listbox at all times.
-        self.list_actions = []
+        self.action_list = []
 
         self.selected_idx = None
 
     def append(self, text, action):
         self.listbox.insert(tk.END, text)
-        self.list_actions.append(action)
+        self.action_list.append(action)
 
     def get_actions(self):
-        return self.list_actions.copy()
+        return self.action_list.copy()
 
     def _select_item(self, event):
         self.selected_idx = self.listbox.nearest(event.y)
@@ -194,19 +194,31 @@ class GameEventSequence:
             self.selected_idx = new_idx
 
 
-# TODO: Rename
-class RoundInfoDisplayList:
-    def __init__(self, master):
+class RoundFrame:
+    def __init__(self, master, label, row, col):
         frame = tk.Frame(master)
-        frame.pack()
+        frame.grid(row=row, column=col)
 
-        self.round_events = \
-                [RoundFrame(frame, f'Round {col + 1}', 0, col) \
-                    for col in range(0, 6)]
+        self.label = tk.Label(frame, text=label)
+        self.label.pack()
+
+        self.event_sequence = GameEventSequence(frame)
+
+        self.round_info_display = RoundInfoDisplay(frame)
+
+        # TODO: Might delete this later.
+        self.round_info_display.update(Resources(), Resources())
+
+    def append_event(self, text, action):
+        self.event_sequence.append(text, action)
+
+    def get_actions(self):
+        return self.event_sequence.get_actions()
+
+    def update_round_info(self, before_round_res, after_round_res):
+        self.round_info_display.update(before_round_res, after_round_res)
 
 
-
-# TODO: Rename
 class RoundInfoDisplay:
     def __init__(self, master):
         frame = tk.Frame(master)

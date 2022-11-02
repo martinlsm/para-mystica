@@ -1,8 +1,6 @@
 from enum import Enum
 
 class Action(Enum):
-    NEXT_ROUND = 0
-
     UPGRADE_DIGGING = 1
     UPGRADE_SHIPPING = 2
     DIG = 3
@@ -15,33 +13,27 @@ class Action(Enum):
     TUNNELING = 9
 
 
-# Returns a list with the number of resources before each round 1-6
-# and post-game resources as the last element in the list.
-def process_actions(faction, action_list):
+def process_actions(faction, action_lists):
+    assert(len(action_lists) == 6)
+
+    # action_list = [[R1 actions], [R2 actions], ..., [R6 actions]]
+    # round_resource = [(before R1, after R1), (before R2, after R2),
+    #                   ..., (before R6, after R6)
     round_resources = []
-    print(action_list)
 
-    # Pad the list in case there are missing go-to-next-round actions.
-    num_next_rounds = action_list.count(Action.NEXT_ROUND)
-    action_list.extend([Action.NEXT_ROUND] * (6 - num_next_rounds))
-    print(action_list)
+    for action_list in action_lists:
+        before_round_res = faction.get_resources()
+        for action in action_list:
+            _resolve(faction, action)
+        after_round_res = faction.get_resources()
 
-    # Proceed to Round 1 unconditionally.
-    _resolve(faction, Action.NEXT_ROUND)
+        round_resources.append((before_round_res, after_round_res))
 
-    for action in action_list:
-        _resolve(faction, action)
-        if action == Action.NEXT_ROUND:
-            round_resources.append(faction.resources)
-
-    print(round_resources)
     return round_resources
 
 
 def _resolve(faction, action):
     match action:
-        case Action.NEXT_ROUND:
-            faction.next_round()
         case Action.UPGRADE_DIGGING:
             faction.upgrade_digging()
         case Action.UPGRADE_SHIPPING:
@@ -53,7 +45,7 @@ def _resolve(faction, action):
             faction.build_dwelling()
         case Action.UPGRADE_TO_TP:
             # TODO: Fix upgrading without neighbor
-            faction.upgrade_to_tp()
+            faction.upgrade_to_tp(True)
         case Action.UPGRADE_TO_TE:
             faction.upgrade_to_te()
         case Action.UPGRADE_TO_SA:

@@ -4,8 +4,6 @@ from actions import Action
 
 def action_button_create(app_ctrl, master, action, grid_row, grid_col):
     match action:
-        case Action.NEXT_ROUND:
-            return NextRoundButton(app_ctrl, master, grid_row, grid_col)
         case Action.UPGRADE_DIGGING:
             return UpgradeDiggingButton(app_ctrl, master, grid_row, grid_col)
         case Action.UPGRADE_SHIPPING:
@@ -39,14 +37,9 @@ class ActionButton:
 
 
     def _on_press(self):
-        self.app_ctrl.append_game_event(self.label, self.action)
-        self.app_ctrl.update_resource_displays()
         print(f'Pressed "{self.label}"')
-
-
-class NextRoundButton:
-    def __init__(self, app_ctrl, master, grid_row, grid_col):
-        ActionButton(app_ctrl, master, 'Next Round', Action.NEXT_ROUND, grid_row, grid_col)
+        self.app_ctrl.append_game_event(self.label, self.action)
+        self.app_ctrl.update_round_displays()
 
 
 class UpgradeDiggingButton:
