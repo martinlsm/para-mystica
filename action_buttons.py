@@ -37,7 +37,6 @@ class ActionButton:
 
 
     def _on_press(self):
-        print(f'Pressed "{self.label}"')
         self.app_ctrl.append_game_event(self.label, self.action)
         self.app_ctrl.update_round_displays()
 

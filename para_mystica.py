@@ -19,15 +19,12 @@ class AppController:
         self.app = app
 
     def select_faction(self, faction_name):
-        print(f'Selected faction "{faction_name}"')
         self.app.select_faction(faction_name)
 
     def select_active_round(self, round_num):
-        print(f'Selected round {round_num}')
         self.app.select_active_round(round_num)
 
     def append_game_event(self, text, action):
-        print(f'Append game event "{text}":{action}')
         self.app.append_game_event(text, action)
 
     def update_round_displays(self):

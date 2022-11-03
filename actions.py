@@ -29,8 +29,6 @@ def process_actions(faction, action_lists):
             _resolve(faction, action)
         after_round_res = faction.get_resources()
 
-        print((before_round_res, after_round_res))
-
         round_resources.append((before_round_res, after_round_res))
 
     return round_resources
