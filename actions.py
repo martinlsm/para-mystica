@@ -22,10 +22,14 @@ def process_actions(faction, action_lists):
     round_resources = []
 
     for action_list in action_lists:
+        faction.next_round()
+
         before_round_res = faction.get_resources()
         for action in action_list:
             _resolve(faction, action)
         after_round_res = faction.get_resources()
+
+        print((before_round_res, after_round_res))
 
         round_resources.append((before_round_res, after_round_res))
 

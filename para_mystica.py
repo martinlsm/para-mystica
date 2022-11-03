@@ -67,6 +67,7 @@ class App:
 
         self.action_selector = ActionSelector(self.root, AppController(self),
                                               self.active_faction)
+        self.update_round_displays()
 
     def append_game_event(self, text, action):
         round_idx = self.active_round - 1
