@@ -1,11 +1,9 @@
 import tkinter as tk
 
-import actions
+from actions import ActionError
 
 from action_buttons import action_button_create
-
-from factions import faction_names, create_faction, supported_actions
-
+from factions import *
 from resources import Resources
 
 
@@ -27,9 +25,6 @@ class AppController:
     def append_game_event(self, text, action):
         self.app.append_game_event(text, action)
 
-    def update_round_displays(self):
-        self.app.update_round_displays()
-
 
 class App:
     def __init__(self):
@@ -46,8 +41,10 @@ class App:
 
         self.active_round_selector = ActiveRoundSelector(AppController(self), self.root)
 
+        self.log = Log(self.root, 5)
+
         # These attributes is set by various events.
-        self.active_faction = None
+        self.faction_state_tracker = None
         # TODO: Is it good to secretly set this to 1 here?
         self.active_round = 1
         self.action_selector = None
@@ -57,34 +54,38 @@ class App:
 
     def select_faction(self, faction_name):
         # TODO: More cleanup is needed here. All round frames need to be refreshed.
-        if self.active_faction is not None:
+        if self.faction_state_tracker is not None:
             self.action_selector.destroy()
 
-        self.active_faction = faction_name
+        self.faction_state_tracker = FactionStateTracker(faction_name)
 
         self.action_selector = ActionSelector(self.root, AppController(self),
-                                              self.active_faction)
-        self.update_round_displays()
+                                              faction_name)
+        self._update_round_displays()
 
     def append_game_event(self, text, action):
+        try:
+            self.faction_state_tracker.append_action(action, self.active_round)
+        except ActionError as e:
+            self.log.error(e)
+            return
+
         round_idx = self.active_round - 1
-        self.round_frames[round_idx].append_event(text, action)
+        self.round_frames[round_idx].push_back_action(text)
 
-    def update_round_displays(self):
-        # Create list of actions
-        action_lists = []
-        for round_frame in self.round_frames:
-            action_lists.append(round_frame.get_actions())
+        self._update_round_displays()
 
-        faction = create_faction(self.active_faction)
-        resource_list = actions.process_actions(faction, action_lists)
+    def select_active_round(self, round_num):
+        self.active_round = round_num
+
+    def _update_round_displays(self):
+        # TODO: Enable skipping of updating earlier rounds
+        self.faction_state_tracker._update(1)
+        resource_list = self.faction_state_tracker.get_resource_lists()
 
         for (res_before, res_after), round_frame \
                 in zip(resource_list, self.round_frames):
             round_frame.update_round_info(res_before, res_after)
-
-    def select_active_round(self, round_num):
-        self.active_round = round_num
 
 
 class FactionSelector:
@@ -128,68 +129,17 @@ class ActionSelector:
         self.act_btns.append(btn)
 
 
-class GameEventSequence:
+class ActionSequenceView:
     def __init__(self, master):
         self.listbox = tk.Listbox(master, selectmode=tk.SINGLE,
                                   activestyle=tk.NONE)
         self.listbox.pack()
 
-        # Left click
-        self.listbox.bind('<Button-1>', self._select_item)
-        # Left click release
-        self.listbox.bind('<ButtonRelease-1>', self._unselect_item)
-        # Drag mouse
-        self.listbox.bind('<B1-Motion>', self._shift_selection)
-
-        # Unfortunately, Tkinter does not seem to support storing metadata of
-        # its elements; they need to be plain strings. This list is therefore
-        # used to store the corresponding action of each element in the
-        # listbox and it needs to be mirroring self.listbox at all times.
-        self.action_list = []
-
-        self.selected_idx = None
-
-    def append(self, text, action):
+    def push_back(self, text):
         self.listbox.insert(tk.END, text)
-        self.action_list.append(action)
 
-    def get_actions(self):
-        return self.action_list.copy()
-
-    def _select_item(self, event):
-        self.selected_idx = self.listbox.nearest(event.y)
-
-    def _unselect_item(self, event):
-        self.listbox.select_clear(self.selected_idx)
-
-    def _shift_selection(self, event):
-        new_idx = self.listbox.nearest(event.y)
-        old_idx = self.selected_idx
-
-        if new_idx < old_idx:
-            # Swap the two elements.
-            item_to_push_down = self.listbox.get(new_idx)
-            self.listbox.delete(new_idx)
-            self.listbox.insert(new_idx + 1, item_to_push_down)
-
-            # Do the same with the mirrored list of actions.
-            item_to_push_down = self.action_list[new_idx]
-            self.action_list.pop(new_idx)
-            self.action_list.insert(new_idx + 1, item_to_push_down)
-
-            self.selected_idx = new_idx
-        elif new_idx > old_idx:
-            # Swap the two elements.
-            item_to_push_up = self.listbox.get(new_idx)
-            self.listbox.delete(new_idx)
-            self.listbox.insert(new_idx - 1, item_to_push_up)
-
-            # Do the same with the mirrored list of actions.
-            item_to_push_up = self.action_list(new_idx)
-            self.action_list.delete(new_idx)
-            self.action_list.insert(new_idx - 1, item_to_push_up)
-
-            self.selected_idx = new_idx
+    def pop_back(self):
+        self.listbox.delete(tk.END)
 
 
 class RoundFrame:
@@ -200,15 +150,16 @@ class RoundFrame:
         self.label = tk.Label(frame, text=label)
         self.label.pack()
 
-        self.event_sequence = GameEventSequence(frame)
+        self.action_sequence = ActionSequenceView(frame)
 
         self.round_info_display = RoundInfoDisplay(frame)
-
-        # TODO: Might delete this later.
         self.round_info_display.update(Resources(), Resources())
 
-    def append_event(self, text, action):
-        self.event_sequence.append(text, action)
+    def push_back_action(self, text):
+        self.action_sequence.push_back(text)
+
+    def pop_back_action(self):
+        self.action_sequence.pop_back()
 
     def get_actions(self):
         return self.event_sequence.get_actions()
@@ -253,6 +204,43 @@ class ActiveRoundSelector:
     def _round_str_to_int(self, round_str):
         # round_str must match the regex "Round [1-6]"
         return int(round_str[6])
+
+
+class Log:
+    def __init__(self, master, height):
+        # TODO: Set font.
+        self.text = tk.Text(master, height=height)
+        self.text.pack(expand=True, fill='both', padx=5, pady=5)
+
+        self.line_count = 0
+
+        self.info_tag = 'info'
+        self.error_tag = 'error'
+        self.warning_tag = 'warning'
+
+        self.text.tag_config(self.info_tag, background='gray', foreground='black')
+        self.text.tag_config(self.error_tag, background='red', foreground='black')
+        self.text.tag_config(self.warning_tag, background='yellow', foreground='black')
+
+    def info(self, msg):
+        self._log('INFO', msg, self.info_tag)
+
+    def error(self, msg):
+        self._log('ERROR', msg, self.error_tag)
+
+    def warning(self, msg):
+        self._log('WARNING', msg, self.warning_tag)
+
+    def _log(self, prefix, msg, tag):
+        self.text.config(state=tk.NORMAL)
+
+        self.line_count += 1
+
+        self.text.insert(tk.END, f'{prefix}: {msg}\n')
+        self.text.tag_add(tag, f'{self.line_count}.0', f'{self.line_count}.{len(prefix)}')
+
+        self.text.config(state=tk.DISABLED)
+
 
 
 if __name__ == '__main__':

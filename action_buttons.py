@@ -35,10 +35,8 @@ class ActionButton:
         btn = tk.Button(master, text=label, command=self._on_press)
         btn.grid(row=grid_row, column=grid_col)
 
-
     def _on_press(self):
         self.app_ctrl.append_game_event(self.label, self.action)
-        self.app_ctrl.update_round_displays()
 
 
 class UpgradeDiggingButton:
